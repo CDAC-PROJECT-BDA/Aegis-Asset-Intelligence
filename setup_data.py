@@ -28,31 +28,26 @@ def setup_data():
     print("Loading dataset (this may take a moment for 220k rows)...")
     df = pd.read_csv(csv_path)
 
-    # Drop Unnamed: 0 if exists
+
     if 'Unnamed: 0' in df.columns:
         df = df.drop('Unnamed: 0', axis=1)
 
-    # Drop timestamp and sensors with entirely missing data (sensor_15 is often fully NaN)
     cols_to_drop = ['timestamp', 'sensor_15']
     df = df.drop(columns=[col for col in cols_to_drop if col in df.columns])
 
-    # Convert machine_status to numerical labels
+
     status_map = {'NORMAL': 0, 'RECOVERING': 1, 'BROKEN': 2}
     if df['machine_status'].dtype == object:
         df['machine_status'] = df['machine_status'].map(status_map)
 
-    # Drop rows where target is missing
     df = df.dropna(subset=['machine_status'])
 
-    # We will train on a balanced subset or just the whole dataset. 
-    # Since BROKEN is very rare (only a few rows), we should use scale_pos_weight or stratify.
-    # Actually, predicting BROKEN is the main goal. 
+
     
     X = df.drop('machine_status', axis=1)
     y = df['machine_status']
 
     print("Training XGBoost Classifier...")
-    # Create a pipeline with imputation and scaling
     pipeline = Pipeline([
         ('imputer', SimpleImputer(strategy='median')),
         ('scaler', StandardScaler()),
