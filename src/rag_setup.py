@@ -26,8 +26,7 @@ def setup_rag():
 
     client = chromadb.PersistentClient(path=db_dir)
     embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-    
-    # Delete existing collection to rebuild with new PDF structure
+
     try:
         client.delete_collection(name="pump_manuals")
     except ValueError:
@@ -36,8 +35,7 @@ def setup_rag():
     collection = client.create_collection(name="pump_manuals")
 
     manuals_dir = 'manuals'
-    
-    # We use different splitters for MD vs PDF text
+
     md_splitter = MarkdownTextSplitter(chunk_size=500, chunk_overlap=50)
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
 
@@ -77,7 +75,6 @@ def setup_rag():
         return
 
     print(f"Embedding {len(docs)} chunks from {len(os.listdir(manuals_dir))} files...")
-    # ChromaDB recommend batching for huge numbers of docs. We'll do it in batches of 1000
     batch_size = 1000
     for i in range(0, len(docs), batch_size):
         batch_docs = docs[i:i+batch_size]
