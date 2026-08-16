@@ -4,7 +4,7 @@ from mcp.server.fastmcp import FastMCP
 import chromadb
 from sentence_transformers import SentenceTransformer
 
-# Initialize FastMCP server
+
 mcp = FastMCP("AegisAssetIntelligence")
 
 DB_PATH = 'iot_telemetry.db'
@@ -70,7 +70,6 @@ def log_maintenance_ticket(component: str, failure_reason: str, priority: str) -
         failure_reason: Description of the failure
         priority: 'HIGH', 'MEDIUM', or 'LOW'
     """
-    # In a real system, this would POST to a CMMS API like Maximo or SAP
     ticket_id = f"TKT-{pd.Timestamp.now().strftime('%Y%m%d%H%M%S')}"
     return f"SUCCESS: Logged maintenance ticket {ticket_id} for {component}. Priority: {priority}. Reason: {failure_reason}"
 
