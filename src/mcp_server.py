@@ -7,7 +7,6 @@ os.environ['HF_HUB_DISABLE_PROGRESS_BARS'] = '1'
 os.environ['TQDM_DISABLE'] = '1'
 os.environ['TRANSFORMERS_VERBOSITY'] = 'error'
 
-
 original_stdout = sys.stdout
 original_stderr = sys.stderr
 
@@ -36,7 +35,6 @@ finally:
     sys.stderr = original_stderr
 
 from fastmcp import FastMCP
-
 
 mcp = FastMCP("AegisAssetIntelligence")
 
