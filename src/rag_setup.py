@@ -9,7 +9,6 @@ from langchain_text_splitters import MarkdownTextSplitter, RecursiveCharacterTex
 import pypdf
 
 
-
 def extract_text_from_pdf(pdf_path):
 
     print(f"Extracting text from {pdf_path}...")
@@ -35,7 +34,6 @@ def extract_text_from_pdf(pdf_path):
         print(f"Error reading {pdf_path}: {e}")
 
     return text
-
 
 
 def setup_rag():
@@ -64,7 +62,6 @@ def setup_rag():
         pass
 
         
-
     collection = client.create_collection(name="pump_manuals")
 
 
