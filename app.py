@@ -5,11 +5,12 @@ import time
 import os
 import pickle
 import plotly.express as px
-from langchain_core.messages import HumanMessage, AIMessage
-from streamlit_autorefresh import st_autorefresh
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from dotenv import load_dotenv
 
-load_dotenv()
+dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(dotenv_path)
+
 
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
@@ -22,26 +23,22 @@ st.set_page_config(page_title="Aegis Asset Intelligence", layout="wide", page_ic
 
 st.markdown("""
 <style>
-    /* Global Fonts and Background */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
     
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif;
     }
     
-    /* Dark Mode Glassmorphism Theme */
     .stApp {
         background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
         color: #e2e8f0;
     }
     
-    /* Headers */
     h1, h2, h3 {
         color: #f8fafc !important;
         font-weight: 600 !important;
     }
     
-    /* Buttons */
     .stButton>button {
         background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%);
         color: white;
@@ -59,7 +56,6 @@ st.markdown("""
         border-color: transparent;
     }
     
-    /* Dataframes and Containers */
     .stDataFrame, .stSelectbox, .stMultiSelect {
         background: rgba(255, 255, 255, 0.05);
         border-radius: 12px;
@@ -68,7 +64,6 @@ st.markdown("""
         padding: 1rem;
     }
     
-    /* Custom Alert Boxes */
     div[data-baseweb="notification"] {
         border-radius: 12px;
         backdrop-filter: blur(10px);
@@ -76,8 +71,6 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
-
-count = st_autorefresh(interval=2000, limit=None, key="data_refresh")
 
 DB_PATH = 'iot_telemetry.db'
 MODEL_PATH = 'src/model.pkl'
@@ -135,82 +128,87 @@ def trigger_failure():
     except Exception as e:
         st.error(f"Failed to inject failure: {e}")
 
-
 st.title("🛡️ Aegis Asset Intelligence")
 st.markdown("Predictive Maintenance & AI Troubleshooting System")
 
 tabs = st.tabs(["📊 Live Dashboard", "💬 Aegis Chatbot", "📚 Manual Library", "ℹ️ About & Architecture"])
 
-
 with tabs[0]:
-    col1, col2 = st.columns([3, 1])
-    
-    with col2:
-        st.subheader("Controls")
-        if st.button("🚨 Simulate Component Failure", use_container_width=True, type="primary"):
-            trigger_failure()
-            
-        st.markdown("---")
-        st.subheader("System Status")
-        status_placeholder = st.empty()
+    @st.fragment(run_every="2s")
+    def live_dashboard():
+        col1, col2 = st.columns([3, 1])
         
-    with col1:
-        st.subheader("Live Sensor Telemetry")
-        
-        df = get_latest_telemetry()
-        
-        if not df.empty:
-            latest_row = df.iloc[0:1]
-            features = latest_row.drop(columns=['id', 'timestamp', 'machine_status'], errors='ignore')
+        with col2:
+            st.subheader("Controls")
             
-            current_status = "NORMAL"
+            is_broken = st.toggle("🚨 Simulate Component Failure", value=st.session_state.get('simulated_failure', False))
             
-            if st.session_state.get('simulated_failure', False):
-                current_status = "BROKEN"
-                st.session_state['simulated_failure'] = False 
-            elif ml_model is not None:
-                try:
-                    pred = ml_model.predict(features)
-                    status_map = {0: "NORMAL", 1: "RECOVERING", 2: "BROKEN"}
-                    current_status = status_map.get(pred[0], "UNKNOWN")
-                except Exception as e:
-                    current_status = f"Model Error"
+            if is_broken != st.session_state.get('simulated_failure', False):
+                st.session_state['simulated_failure'] = is_broken
+                if is_broken:
+                    trigger_failure()
+                
+            st.markdown("---")
+            st.subheader("System Status")
+            status_placeholder = st.empty()
+            
+        with col1:
+            st.subheader("Live Sensor Telemetry")
+            
+            df = get_latest_telemetry()
+            
+            if not df.empty:
+                latest_row = df.iloc[0:1]
+                features = latest_row.drop(columns=['id', 'timestamp', 'machine_status'], errors='ignore')
+                
+                current_status = "NORMAL"
+                
+                if st.session_state.get('simulated_failure', False):
+                    current_status = "BROKEN"
+                elif ml_model is not None:
+                    try:
+                        pred = ml_model.predict(features)
+                        status_map = {0: "NORMAL", 1: "RECOVERING", 2: "BROKEN"}
+                        current_status = status_map.get(pred[0], "UNKNOWN")
+                    except Exception as e:
+                        current_status = f"Model Error"
+                        
+                if current_status == "BROKEN":
+                    status_placeholder.error("🚨 CRITICAL FAILURE DETECTED 🚨\n\nAI Agent has been pre-loaded with context. Switch to Chatbot tab for troubleshooting.")
+                    st.session_state['failure_context'] = f"The ML model just detected a BROKEN state. Latest sensor readings:\n{latest_row.to_dict(orient='records')[0]}"
+                elif current_status == "RECOVERING":
+                    status_placeholder.warning("⚠️ SYSTEM RECOVERING")
+                else:
+                    status_placeholder.success("✅ SYSTEM NORMAL")
                     
-            if current_status == "BROKEN":
-                status_placeholder.error("🚨 CRITICAL FAILURE DETECTED 🚨\n\nAI Agent has been pre-loaded with context. Switch to Chatbot tab for troubleshooting.")
-                st.session_state['failure_context'] = f"The ML model just detected a BROKEN state. Latest sensor readings:\n{latest_row.to_dict(orient='records')[0]}"
-            elif current_status == "RECOVERING":
-                status_placeholder.warning("⚠️ SYSTEM RECOVERING")
-            else:
-                status_placeholder.success("✅ SYSTEM NORMAL")
+                df_plot = df.rename(columns=SENSOR_MAP)
+                df_plot = df_plot.iloc[::-1] 
                 
-            df_plot = df.rename(columns=SENSOR_MAP)
-            df_plot = df_plot.iloc[::-1] 
-            
-            available_sensors = [col for col in df_plot.columns if 'sensor' in col.lower() or 'temp' in col.lower() or 'vibration' in col.lower()]
-            default_sensors = [SENSOR_MAP.get('sensor_00'), SENSOR_MAP.get('sensor_04'), SENSOR_MAP.get('sensor_10')]
-            
-            default_sensors = [s for s in default_sensors if s in available_sensors]
-            
-            selected_sensors = st.multiselect(
-                "Select Sensors to Visualize",
-                options=available_sensors,
-                default=default_sensors if default_sensors else available_sensors[:3]
-            )
-            
-            if selected_sensors:
-                fig = px.line(df_plot, y=selected_sensors, title="Telemetry Trends", template="plotly_dark")
-                fig.update_layout(
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                available_sensors = [col for col in df_plot.columns if 'sensor' in col.lower() or 'temp' in col.lower() or 'vibration' in col.lower()]
+                default_sensors = [SENSOR_MAP.get('sensor_00'), SENSOR_MAP.get('sensor_04'), SENSOR_MAP.get('sensor_10')]
+                
+                default_sensors = [s for s in default_sensors if s in available_sensors]
+                
+                selected_sensors = st.multiselect(
+                    "Select Sensors to Visualize",
+                    options=available_sensors,
+                    default=default_sensors if default_sensors else available_sensors[:3]
                 )
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.warning("Please select at least one sensor to visualize.")
                 
-        else:
-            st.info("Waiting for IoT data... Is `iot_ingestion.py` running?")
+                if selected_sensors:
+                    fig = px.line(df_plot, y=selected_sensors, title="Telemetry Trends", template="plotly_dark")
+                    fig.update_layout(
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                    )
+                    st.plotly_chart(fig, width='stretch')
+                else:
+                    st.warning("Please select at least one sensor to visualize.")
+                    
+            else:
+                st.info("Waiting for IoT data... Is `iot_ingestion.py` running?")
+    live_dashboard()
 
 with tabs[1]:
     st.subheader("Aegis Maintenance Assistant")
@@ -225,9 +223,12 @@ with tabs[1]:
         if isinstance(msg, HumanMessage):
             with st.chat_message("user"):
                 st.write(msg.content)
-        elif isinstance(msg, AIMessage):
+        elif isinstance(msg, AIMessage) and msg.content:
             with st.chat_message("assistant"):
                 st.write(msg.content)
+        elif isinstance(msg, ToolMessage):
+            with st.chat_message("assistant"):
+                st.write(f"🔧 *Used tool: {msg.name}*")
 
     colA, colB = st.columns(2)
     with colA:
@@ -252,14 +253,24 @@ with tabs[1]:
             with st.spinner("Aegis is analyzing (via Groq + MCP)..."):
                 try:
                     context = st.session_state.get('failure_context', '')
+                    old_len = len(st.session_state.messages)
                     result = run_agent(st.session_state.messages, context)
                     new_msgs = result['messages']
-                    final_msg = new_msgs[-1]
                     
-                    st.write(final_msg.content)
-                    st.session_state.messages.append(AIMessage(content=final_msg.content))
+
+                    st.session_state.messages = new_msgs
+                    
+                    for msg in new_msgs[old_len:]:
+                        if isinstance(msg, AIMessage) and msg.content:
+                            st.write(msg.content)
+                        elif isinstance(msg, ToolMessage):
+                            st.write(f"🔧 *Used tool: {msg.name}*")
                 except Exception as e:
-                    st.error(f"Agent Error: Ensure GROQ_API_KEY is set in .env. Details: {e}")
+                    import traceback
+                    print("=== AGENT CRASH TRACEBACK ===")
+                    traceback.print_exc()
+                    print("=============================")
+                    st.error(f"Agent Error: {e}\nCheck the terminal for full traceback.")
 
 with tabs[2]:
     st.subheader("Equipment Manuals (RAG Source)")
