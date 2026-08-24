@@ -76,7 +76,6 @@ def run_ingestion():
                 row_to_insert = normal_df.iloc[normal_idx % len(normal_df)].to_dict()
                 normal_idx += 1
             
-
             cols_to_insert = [c for c in cols if c in row_to_insert]
             placeholders = ', '.join(['?'] * len(cols_to_insert))
             col_names = ', '.join(cols_to_insert)
@@ -90,6 +89,7 @@ def run_ingestion():
             conn.commit()
             
             time.sleep(1.5) 
+
         except Exception as e:
             print(f"Ingestion error: {e}")
             time.sleep(2)
