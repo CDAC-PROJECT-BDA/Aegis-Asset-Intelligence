@@ -65,6 +65,8 @@ def setup_data():
     model_path = os.path.join('src', 'model.pkl')
     with open(model_path, 'wb') as f:
         pickle.dump(pipeline, f)
+
+
     
     print(f"Model saved to {model_path}")
 
